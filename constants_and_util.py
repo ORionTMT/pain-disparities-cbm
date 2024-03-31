@@ -66,15 +66,15 @@ else:
     # Please modify variables / paths here. 
     if sys.version.split()[0] != '3.5.2':
         print("Warning: running code with a Python version which differs from original Python version (3.5.2)")
-    REPROCESS_RAW_DATA = False # set this to False if you just want to work with the processed data, and don't need to reprocess it. 
+    REPROCESS_RAW_DATA = True # set this to False if you just want to work with the processed data, and don't need to reprocess it. 
     
     # Please set these paths for your system. 
-    INDIVIDUAL_IMAGES_PATH = 'THIS_IS_A_TEMPORARY_PATH_PLEASE_REPLACE_ME' # points to the directory which stores the processed data, so you should download the processed data into this folder. If you are reprocessing the raw data, the individual images will be stored in this folder. 
-    FITTED_MODEL_DIR = 'THIS_IS_A_TEMPORARY_PATH_PLEASE_REPLACE_ME' # This is where you store the fitted models.  Please create three empty subdirectories in this directory: "configs", "results", and "model_weights". 
+    INDIVIDUAL_IMAGES_PATH = '/home/mt3566/pain-disparities/processed_data' # points to the directory which stores the processed data, so you should download the processed data into this folder. If you are reprocessing the raw data, the individual images will be stored in this folder. 
+    FITTED_MODEL_DIR = '/home/mt3566/pain-disparities/fitted_model' # This is where you store the fitted models.  Please create three empty subdirectories in this directory: "configs", "results", and "model_weights". 
     
     # Only need to set these paths if you are reprocessing raw data. 
-    BASE_NON_IMAGE_DATA_DIR = 'THIS_IS_A_TEMPORARY_PATH_PLEASE_REPLACE_ME' # Set this path to point to the directory where you downloaded the NON-IMAGE OAI data - eg, it should contain folders like "AllClinical_ASCII". 
-    BASE_IMAGE_DATA_DIR = 'THIS_IS_A_TEMPORARY_PATH_PLEASE_REPLACE_ME' # Set this path to point to the directory where you downloaded the IMAGE OAI data - eg, it should contain folders like "00m" for each timepoint. 
+    BASE_NON_IMAGE_DATA_DIR = '/home/mt3566/NDA/nonImage' # Set this path to point to the directory where you downloaded the NON-IMAGE OAI data - eg, it should contain folders like "AllClinical_ASCII". 
+    BASE_IMAGE_DATA_DIR = '/home/mt3566/NDA/nda-tools/downloadcmd/packages/1225784' # Set this path to point to the directory where you downloaded the IMAGE OAI data - eg, it should contain folders like "00m" for each timepoint. 
 
 assert os.path.exists(INDIVIDUAL_IMAGES_PATH), 'You need to set INDIVIDUAL_IMAGES_PATH; see "Please set these paths for your system" comment in constants_and_util.py'
 assert os.path.exists(FITTED_MODEL_DIR), 'You need to set FITTED_MODEL_DIR; see "Please set these paths for your system" comment in constants_and_util.py. After setting this directory, please create empty subdirectories called "configs", "results", and "model_weights" within it'
