@@ -4,7 +4,7 @@ import time
 from traceback import print_exc
 import cv2
 import numpy as np
-hajimi
+
 
 from constants_and_util import *
 import matplotlib.pyplot as plt
