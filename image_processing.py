@@ -301,23 +301,23 @@ class XRayImageDataset:
             self.images.clear()
     import os
 
-def save_processed_images(self, image_counter):
-    print("Saving processed images to disk...")
-    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    processed_image_path = "{}_{}_{}.pkl".format(self.processed_image_path, timestamp, image_counter)
-    
-    # Create the directory if it doesn't exist
-    directory = os.path.dirname(processed_image_path)
-    if not os.path.exists(directory):
-        os.makedirs(directory)
-    
-    if hasattr(self, 'diacom_image_statistics'):
-        data_to_save = {'images': self.images, 'image_statistics': self.diacom_image_statistics}
-    else:
-        data_to_save = {'images': self.images}
-    
-    pickle.dump(data_to_save, open(processed_image_path, 'wb'))
-    print("Successfully saved processed images up to image {}.".format(image_counter))
+    def save_processed_images(self, image_counter):
+        print("Saving processed images to disk...")
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        processed_image_path = "{}_{}_{}.pkl".format(self.processed_image_path, timestamp, image_counter)
+        
+        # Create the directory if it doesn't exist
+        directory = os.path.dirname(processed_image_path)
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+        
+        if hasattr(self, 'diacom_image_statistics'):
+            data_to_save = {'images': self.images, 'image_statistics': self.diacom_image_statistics}
+        else:
+            data_to_save = {'images': self.images}
+        
+        pickle.dump(data_to_save, open(processed_image_path, 'wb'))
+        print("Successfully saved processed images up to image {}.".format(image_counter))
     def plot_pipeline_examples(self, n_examples):
         """
         plot n_examples random images to make sure pipeline looks ok. 
