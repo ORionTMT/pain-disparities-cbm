@@ -4,8 +4,6 @@ import time
 from traceback import print_exc
 import cv2
 import numpy as np
-
-
 from constants_and_util import *
 import matplotlib.pyplot as plt
 
@@ -109,7 +107,10 @@ class XRayImageDataset:
         self.knee_localizer = KneeLocalizer()
         self.crop_to_just_the_knee = crop_to_just_the_knee
 
-        self.processed_image_dir = os.path.join(BASE_IMAGE_DATA_DIR, 'processed_image_data')
+        if use_small_data:
+            self.processed_image_path = os.path.join(BASE_IMAGE_DATA_DIR, 'processed_image_data', 'small_data.pkl')
+        else:
+            self.processed_image_path = os.path.join(BASE_IMAGE_DATA_DIR, 'processed_image_data', 'data.pkl')
 
         self.extra_margin_for_each_image = 1.1 # how much extra margin to give the left/right images. 
 
@@ -135,44 +136,26 @@ class XRayImageDataset:
             pickle.dump({'images':self.images, 'image_statistics':self.diacom_image_statistics}, open(self.processed_image_path, 'wb'))
             print("Successfully processed and saved images")
         else:
-            print("Loading images from %s" % self.processed_image_dir)
-            self.images = []
-            self.diacom_image_statistics = {}
-
-            batch_size = 100  # Adjust the batch size based on available memory
-
-            for batch_start in range(0, len(os.listdir(self.processed_image_dir)), batch_size):
-                batch_files = os.listdir(self.processed_image_dir)[batch_start:batch_start + batch_size]
-                batch_images = []
-
-                for file_name in batch_files:
-                    if file_name.startswith('data.pkl_'):
-                        file_path = os.path.join(self.processed_image_dir, file_name)
-                        with open(file_path, 'rb') as f:
-                            reloaded_data = pickle.load(f)
-                            batch_images.extend(reloaded_data['images'])
-                            if 'image_statistics' in reloaded_data:
-                                self.diacom_image_statistics.update(reloaded_data['image_statistics'])
-
-                self.images.extend(batch_images)
-
-                # Process the batch of images
-                if not self.crop_to_just_the_knee:
-                    if not self.show_both_knees_in_each_image:
-                        self.cut_images_in_two(batch_images)  # cut into left + right images.
-                    else:
-                        self.flip_right_images(batch_images)  # if you want both knees in one image, flip the right images so knees are on same side.
+            print("loading images from %s" % self.processed_image_path)
+            reloaded_data = pickle.load(open(self.processed_image_path, 'rb'))
+            self.images = reloaded_data['images']
+            if not self.crop_to_just_the_knee:
+                if not self.show_both_knees_in_each_image:
+                    self.cut_images_in_two() # cut into left + right images. 
                 else:
-                    for i in range(len(batch_images)):
-                        assert batch_images[i]['cropped_left_knee'].max() <= 1
-                        assert batch_images[i]['cropped_right_knee'].max() <= 1
-                        assert batch_images[i]['cropped_left_knee'].min() >= 0
-                        assert batch_images[i]['cropped_right_knee'].min() >= 0
+                    self.flip_right_images() # if you want both knees in one image, flip the right images so knees are on same side. 
+            else:
+                for i in range(len(self.images)):
+                    assert self.images[i]['cropped_left_knee'].max() <= 1
+                    assert self.images[i]['cropped_right_knee'].max() <= 1
+                    assert self.images[i]['cropped_left_knee'].min() >= 0
+                    assert self.images[i]['cropped_right_knee'].min() >= 0
 
-                        batch_images[i]['left_knee_scaled_to_zero_one'] = batch_images[i]['cropped_left_knee'].copy()
-                        batch_images[i]['right_knee_scaled_to_zero_one'] = batch_images[i]['cropped_right_knee'][:, ::-1].copy()
-                        batch_images[i]['cropped_left_knee'] = None
-                        batch_images[i]['cropped_right_knee'] = None
+                    self.images[i]['left_knee_scaled_to_zero_one'] = self.images[i]['cropped_left_knee'].copy()
+                    self.images[i]['right_knee_scaled_to_zero_one'] = self.images[i]['cropped_right_knee'][:, ::-1].copy()
+                    self.images[i]['cropped_left_knee'] = None
+                    self.images[i]['cropped_right_knee'] = None
+
 
             if self.downsample_factor_on_reload is not None:
                 for i in range(len(self.images)):
@@ -187,14 +170,11 @@ class XRayImageDataset:
                         new_shape = new_shape[::-1] 
                         self.images[i]['%s_knee_scaled_to_zero_one' % side] = cv2.resize(self.images[i]['%s_knee_scaled_to_zero_one' % side],
                          dsize=tuple(new_shape))
-            batch_output_dir = os.path.join(self.processed_image_dir, 'processed_batches')
-            os.makedirs(batch_output_dir, exist_ok=True)
-            batch_output_path = os.path.join(batch_output_dir, 'batch_{}.pkl'.format(batch_start))
-            with open(batch_output_path, 'wb') as f:
-                pickle.dump(batch_images, f)
-
-            # Clear the batch_images list to free up memory
-            batch_images.clear()
+            self.diacom_image_statistics = reloaded_data['image_statistics']
+            print("Image statistics are", reloaded_data['image_statistics'])
+            self.make_images_RGB_and_zscore() # z-score. The reason we do this AFTER processing is that we don't want to save the image 3x. 
+            #self.plot_pipeline_examples(25) # make sanity check plots
+            print("Successfully loaded %i images" % len(self.images))
 
     def crop_to_knee(self, dicom_image_path):
         results = self.knee_localizer.predict(dicom_image_path)
@@ -306,26 +286,38 @@ class XRayImageDataset:
                                         'unnormalized_image_array':image_array, 
                                         'cropped_left_knee':cropped_left_knee, 
                                         'cropped_right_knee':cropped_right_knee,
+                                        # Users may also want to identify the specific image that was assessed to generate the data for an anatomic site and time point and merge the image assessment data with meta-data about that image (please see Appendix D for example SAS code). Individual images (radiographs, MRI series) are identified by a unique barcode. The barcode is recorded in the AccessionNumber in the DICOM header of the image.
                                         'barcode':diacom_image.AccessionNumber
                                         })
-                                    image_counter+=1
+                                    image_counter += 1
                                     if len(batch_images) >= batch_size:
-                                        self.save_processed_images(image_counter)
+                                        self.images.extend(batch_images)
                                         batch_images = []
-                                        # Users may also want to identify the specific image that was assessed to generate the data for an anatomic site and time point and merge the image assessment data with meta-data about that image (please see Appendix D for example SAS code). Individual images (radiographs, MRI series) are identified by a unique barcode. The barcode is recorded in the AccessionNumber in the DICOM header of the image.
-                                        
+                                        self.save_processed_images(image_counter)
+                                        self.images.clear()
         if len(batch_images) > 0:
+            self.images.extend(batch_images)
             self.save_processed_images(image_counter)
-            batch_images.clear()
-    def save_processed_images(self, image_counter):
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        print("Saving processed images to disk...")
-        processed_image_path = "{}_{}_{}.pkl".format(self.processed_image_dir, timestamp, image_counter)
-        directory = os.path.dirname(processed_image_path)
-        if not os.path.exists(directory):
-            os.makedirs(directory)
-        pickle.dump({'images': self.images}, open(processed_image_path, 'wb'))
-        print("Successfully saved processed images up to image {}.".format(image_counter))  
+            self.images.clear()
+    import os
+
+def save_processed_images(self, image_counter):
+    print("Saving processed images to disk...")
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    processed_image_path = "{}_{}_{}.pkl".format(self.processed_image_path, timestamp, image_counter)
+    
+    # Create the directory if it doesn't exist
+    directory = os.path.dirname(processed_image_path)
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+    
+    if hasattr(self, 'diacom_image_statistics'):
+        data_to_save = {'images': self.images, 'image_statistics': self.diacom_image_statistics}
+    else:
+        data_to_save = {'images': self.images}
+    
+    pickle.dump(data_to_save, open(processed_image_path, 'wb'))
+    print("Successfully saved processed images up to image {}.".format(image_counter))
     def plot_pipeline_examples(self, n_examples):
         """
         plot n_examples random images to make sure pipeline looks ok. 
@@ -380,21 +372,20 @@ class XRayImageDataset:
 
         return left_knee, right_knee
 
-    def cut_images_in_two(self, batch_images):
+    def cut_images_in_two(self):
         """
-        Cut the images in the batch into left + right knees.
+        Loop over all images and cut each in two. 
         """
-        for i in range(len(batch_images)):
-            left_knee, right_knee = self.cut_image_in_half(batch_images[i]['image_array_scaled_to_zero_one'])
-            batch_images[i]['left_knee_scaled_to_zero_one'] = left_knee
-            batch_images[i]['right_knee_scaled_to_zero_one'] = right_knee
-            batch_images[i]['image_array_scaled_to_zero_one'] = None
+        for i in range(len(self.images)):
+            self.images[i]['left_knee_scaled_to_zero_one'], self.images[i]['right_knee_scaled_to_zero_one'] = self.cut_image_in_half(self.images[i]['image_array_scaled_to_zero_one'])
+            self.images[i]['image_array_scaled_to_zero_one'] = None
 
-    def flip_right_images(self, batch_images):
-        for i in range(len(batch_images)):
-            batch_images[i]['left_knee_scaled_to_zero_one'] = batch_images[i]['image_array_scaled_to_zero_one'].copy()
-            batch_images[i]['right_knee_scaled_to_zero_one'] = batch_images[i]['image_array_scaled_to_zero_one'][:, ::-1].copy()
-            batch_images[i]['image_array_scaled_to_zero_one'] = None
+    def flip_right_images(self):
+        for i in range(len(self.images)):
+            self.images[i]['left_knee_scaled_to_zero_one'] = self.images[i]['image_array_scaled_to_zero_one'].copy()
+            self.images[i]['right_knee_scaled_to_zero_one'] = self.images[i]['image_array_scaled_to_zero_one'][:, ::-1].copy()
+            self.images[i]['image_array_scaled_to_zero_one'] = None
+
 
     def resize_image(self, original_array, new_size):
         """
@@ -450,41 +441,25 @@ class XRayImageDataset:
         return arr
 
     def compute_dataset_image_statistics_and_divide_by_max(self, just_normalize_cropped_knees):
-        """
-        Put images into the zero-one range by dividing by the maximum value. 
-        Also compute statistics of the images: mean and std. 
-
-        Note: it is important to do this for cropped knees separately because they are not on the same scale. 
-        The external package that we uses loads them as 8-bit rather than 16-bit or something. 
-
-        Checked. 
-        """
         print("\n\nNow computing overall dataset statistics")
         print("Just analyze cropped knees: %s" % just_normalize_cropped_knees)
-        
-        zero_size_array_count = 0
+
         all_pixel_arrays = []
         for i in range(len(self.images)):
             if just_normalize_cropped_knees:
                 if self.images[i]['cropped_right_knee'] is not None:
                     all_pixel_arrays.append(self.images[i]['cropped_right_knee'])
                     all_pixel_arrays.append(self.images[i]['cropped_left_knee'])
-                else:
-                    zero_size_array_count += 1
             else:
                 if 'unnormalized_image_array' in self.images[i]:
                     all_pixel_arrays.append(self.images[i]['unnormalized_image_array'])
-                else:
-                    zero_size_array_count += 1
-        
-        print("Number of zero-size arrays encountered: %d" % zero_size_array_count)
-
+                
         if len(all_pixel_arrays) == 0:
             print("Warning: No valid pixel arrays found. Skipping dataset image statistics computation.")
             return
-                
+        
         all_pixel_arrays = np.array(all_pixel_arrays)
-        arr_max =  np.max(all_pixel_arrays)
+        arr_max = np.max(all_pixel_arrays)
         assert np.min(all_pixel_arrays) >= 0
         
         if just_normalize_cropped_knees:
@@ -912,7 +887,7 @@ def write_out_individual_images_for_one_dataset(write_out_image_data,
     So, after loading the whole image dataset, we also write out each image into a separate file. 
     We save the images several different ways -- with different preprocessing and downsampling sizes. 
     Checked. 
-    """
+    """    
     image_dataset_kwargs = copy.deepcopy(IMAGE_DATASET_KWARGS)
     image_dataset_kwargs['reprocess_all_images'] = False
     image_dataset_kwargs['use_small_data'] = False
@@ -921,7 +896,6 @@ def write_out_individual_images_for_one_dataset(write_out_image_data,
     image_dataset_kwargs['show_both_knees_in_each_image'] = show_both_knees_in_each_image
     image_dataset_kwargs['crop_to_just_the_knee'] = crop_to_just_the_knee
     image_dataset = XRayImageDataset(**image_dataset_kwargs)
-
     for dataset in ['train', 'val', 'test', 'BLINDED_HOLD_OUT_DO_NOT_USE']:
         print("Writing out individual images for %s" % dataset)
         base_path = get_base_dir_for_individual_image(dataset=dataset, 
@@ -930,7 +904,15 @@ def write_out_individual_images_for_one_dataset(write_out_image_data,
                                                       normalization_method=normalization_method, 
                                                       seed_to_further_shuffle_train_test_val_sets=seed_to_further_shuffle_train_test_val_sets, 
                                                       crop_to_just_the_knee=crop_to_just_the_knee)
-        
+        if os.path.exists(base_path):
+            raise Exception('base path %s should not exist' % base_path)
+        time.sleep(3)
+
+        while not os.path.exists(base_path):
+            # for some reason this command occasionally fails; make it more robust. 
+            os.system('mkdir %s' % base_path)
+            time.sleep(10)
+
         if dataset == 'BLINDED_HOLD_OUT_DO_NOT_USE':
             i_promise_i_really_want_to_use_the_blinded_hold_out_set = True
         else:
@@ -940,27 +922,12 @@ def write_out_individual_images_for_one_dataset(write_out_image_data,
                                                                    timepoints_to_filter_for=TIMEPOINTS_TO_FILTER_FOR, 
                                                                    seed_to_further_shuffle_train_test_val_sets=seed_to_further_shuffle_train_test_val_sets, 
                                                                    i_promise_i_really_want_to_use_the_blinded_hold_out_set=i_promise_i_really_want_to_use_the_blinded_hold_out_set)
-        
-        batch_output_dir = os.path.join(image_dataset.processed_image_dir, 'processed_batches')
-        batch_files = os.listdir(batch_output_dir)
-        matched_images = []
-        image_codes = []
-
-        for batch_file in batch_files:
-            batch_path = os.path.join(batch_output_dir, batch_file)
-            with open(batch_path, 'rb') as f:
-                batch_images = pickle.load(f)
-                batch_combined_df, batch_matched_images, batch_image_codes = match_image_dataset_to_non_image_dataset(batch_images, non_image_dataset)
-                matched_images.extend(batch_matched_images)
-                image_codes.extend(batch_image_codes)
-
-        combined_df = pd.concat(batch_combined_df)
+        combined_df, matched_images, image_codes = match_image_dataset_to_non_image_dataset(image_dataset, non_image_dataset)
         ensure_barcodes_match(combined_df, image_codes)
         assert combined_df['visit'].map(lambda x:x in TIMEPOINTS_TO_FILTER_FOR).all()
-
+        
         non_image_csv_outfile = os.path.join(base_path, 'non_image_data.csv')
         combined_df.to_csv(non_image_csv_outfile)
-
         if write_out_image_data:
             ensure_barcodes_match(combined_df, image_codes)
             pickle.dump(image_codes, open(os.path.join(base_path, 'image_codes.pkl'), 'wb'))
@@ -968,7 +935,6 @@ def write_out_individual_images_for_one_dataset(write_out_image_data,
                 image_path = os.path.join(base_path, 'image_%i.npy' % i)
                 np.save(image_path, matched_images[i])
                 print("%s image %i/%i written out to %s" % (dataset, i + 1, len(combined_df), image_path))
-
     print("Successfully wrote out all images.")
 
 def write_out_image_datasets_in_parallel():
@@ -1410,3 +1376,4 @@ if __name__ == '__main__':
     
 
 
+ 
