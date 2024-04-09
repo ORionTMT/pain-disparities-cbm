@@ -138,7 +138,9 @@ class XRayImageDataset:
                     with open(file_path, "rb") as f:
                         data = pickle.load(f)
                         self.images.extend(data["images"])
-                        self.diacom_image_statistics.update(data["image_statistics"])
+                        if "image_statistics" in data:
+                            self.diacom_image_statistics.update(data["image_statistics"])
+                        
             
             if not self.crop_to_just_the_knee:
                 if not self.show_both_knees_in_each_image:
