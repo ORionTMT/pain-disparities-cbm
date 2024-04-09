@@ -39,7 +39,7 @@ def log_memory_usage():
     process = psutil.Process(os.getpid())
     memory_info = process.memory_info()
     memory_usage_mb = memory_info.rss / 1024 / 1024  # Convert bytes to megabytes
-    logging.info(f"Memory usage: {memory_usage_mb:.2f} MB")
+    logging.info("Memory usage: {:.2f} MB".format(memory_usage_mb))
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
