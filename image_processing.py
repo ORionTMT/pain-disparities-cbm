@@ -31,7 +31,18 @@ from PIL import Image
 sys.path.append('KneeLocalizer/oulukneeloc/')
 from detector import KneeLocalizer
 
+import os
+import psutil
+import logging
 
+def log_memory_usage():
+    process = psutil.Process(os.getpid())
+    memory_info = process.memory_info()
+    memory_usage_mb = memory_info.rss / 1024 / 1024  # Convert bytes to megabytes
+    logging.info(f"Memory usage: {memory_usage_mb:.2f} MB")
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
 
 def get_directories(path):
     """ 
@@ -895,7 +906,7 @@ def write_out_individual_images_for_one_dataset(write_out_image_data,
     image_dataset_kwargs['show_both_knees_in_each_image'] = show_both_knees_in_each_image
     image_dataset_kwargs['crop_to_just_the_knee'] = crop_to_just_the_knee
     image_dataset = XRayImageDataset(**image_dataset_kwargs)
-
+    log_memory_usage()
     for dataset in ['train', 'val', 'test', 'BLINDED_HOLD_OUT_DO_NOT_USE']:
         print("Writing out individual images for %s" % dataset)
         base_path = get_base_dir_for_individual_image(dataset=dataset,
@@ -923,6 +934,7 @@ def write_out_individual_images_for_one_dataset(write_out_image_data,
                                                                    seed_to_further_shuffle_train_test_val_sets=seed_to_further_shuffle_train_test_val_sets,
                                                                    i_promise_i_really_want_to_use_the_blinded_hold_out_set=i_promise_i_really_want_to_use_the_blinded_hold_out_set)
         
+        log_memory_usage()
         num_batches = (len(non_image_dataset) + batch_size - 1) // batch_size
         for batch in range(num_batches):
             start_idx = batch * batch_size
@@ -930,7 +942,7 @@ def write_out_individual_images_for_one_dataset(write_out_image_data,
             
             non_image_dataset_batch = non_image_dataset[start_idx:end_idx]
             image_dataset_batch = image_dataset[start_idx:end_idx]
-            
+            log_memory_usage()
             combined_df_batch, matched_images_batch, image_codes_batch = match_image_dataset_to_non_image_dataset(image_dataset_batch, non_image_dataset_batch)
             ensure_barcodes_match(combined_df_batch, image_codes_batch)
             assert combined_df_batch['visit'].map(lambda x:x in TIMEPOINTS_TO_FILTER_FOR).all()
