@@ -304,7 +304,7 @@ class XRayImageDataset:
     def save_processed_images(self, image_counter):
         print("Saving processed images to disk...")
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        processed_image_path = os.path.join(self.processed_image_dir, f"data.pkl_{timestamp}_{image_counter}.pkl")
+        processed_image_path = os.path.join(self.processed_image_dir, "data.pkl_{}_{}".format(timestamp, image_counter))
         
         if hasattr(self, 'diacom_image_statistics'):
             data_to_save = {'images': self.images, 'image_statistics': self.diacom_image_statistics}
@@ -313,7 +313,7 @@ class XRayImageDataset:
         
         with open(processed_image_path, 'wb') as f:
             pickle.dump(data_to_save, f)
-        print(f"Successfully saved processed images up to image {image_counter}.")
+        print("Successfully saved processed images up to image {}.".format(image_counter))
     def plot_pipeline_examples(self, n_examples):
         """
         plot n_examples random images to make sure pipeline looks ok. 
@@ -932,7 +932,7 @@ def write_out_individual_images_for_one_dataset(write_out_image_data,
                 np.save(image_path, matched_images[i])
                 print("%s image %i/%i written out to %s" % (dataset, i + 1, len(combined_df), image_path))
     print("Successfully wrote out all images.")
-    
+
 def write_out_image_datasets_in_parallel():
     """
     Parallelize the writing out of images since it takes a while. This can be run on rambo. 
