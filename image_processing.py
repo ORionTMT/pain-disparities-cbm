@@ -66,15 +66,15 @@ class XRayImageDataset:
     Class for loading data.
     """
     def __init__(self, 
-        desired_image_type, 
-        normalization_method, 
-        reprocess_all_images,
-        show_both_knees_in_each_image,
-        crop_to_just_the_knee,
-        make_plot=False,
-        max_images_to_load=None, 
-        use_small_data=False, 
-        downsample_factor_on_reload=None):
+    desired_image_type, 
+    normalization_method, 
+    reprocess_all_images,
+    show_both_knees_in_each_image,
+    crop_to_just_the_knee,
+    make_plot=False,
+    max_images_to_load=None, 
+    use_small_data=False, 
+    downsample_factor_on_reload=None):
         """
         Creates the dataset. 
         desired_image_type: the type of x-ray part you want (for example, Bilateral PA Fixed Flexion Knee)
@@ -106,11 +106,12 @@ class XRayImageDataset:
         self.show_both_knees_in_each_image = show_both_knees_in_each_image
         self.knee_localizer = KneeLocalizer()
         self.crop_to_just_the_knee = crop_to_just_the_knee
+        self.diacom_image_statistics = {}
 
         if use_small_data:
-            self.processed_image_path = os.path.join(BASE_IMAGE_DATA_DIR, 'processed_image_data', 'small_data.pkl')
+            self.processed_image_dir = os.path.join(BASE_IMAGE_DATA_DIR, 'processed_image_data', 'small_data')
         else:
-            self.processed_image_path = os.path.join(BASE_IMAGE_DATA_DIR, 'processed_image_data', 'data.pkl')
+            self.processed_image_dir = os.path.join(BASE_IMAGE_DATA_DIR, 'processed_image_data')
 
         self.extra_margin_for_each_image = 1.1 # how much extra margin to give the left/right images. 
 
@@ -118,6 +119,7 @@ class XRayImageDataset:
             self.max_images_to_load = max_images_to_load
         else:
             self.max_images_to_load = 99999999999
+        
         if self.reprocess_all_images:
             print("Reprocessing all images from scratch")
             self.load_all_images() # load images into numpy arrays from dicom
@@ -125,20 +127,19 @@ class XRayImageDataset:
             # put images on 0-1 scale. Do this separately for the cropped knee images and the full images. 
             # Note: it is important to do this for cropped knees separately because they are not on the same scale. 
             # The external package that we uses loads them as 8-bit rather than 16-bit or something. 
-            self.diacom_image_statistics = {}
             self.compute_dataset_image_statistics_and_divide_by_max(just_normalize_cropped_knees=False)
             self.compute_dataset_image_statistics_and_divide_by_max(just_normalize_cropped_knees=True)
-
-            for i in range(len(self.images)):
-                # don't save extra images
-                self.images[i]['unnormalized_image_array'] = None
-            print("Number of images: %i" % len(self.images))
-            pickle.dump({'images':self.images, 'image_statistics':self.diacom_image_statistics}, open(self.processed_image_path, 'wb'))
-            print("Successfully processed and saved images")
+            print("Successfully processed images")
         else:
-            print("loading images from %s" % self.processed_image_path)
-            reloaded_data = pickle.load(open(self.processed_image_path, 'rb'))
-            self.images = reloaded_data['images']
+            print("Loading images from %s" % self.processed_image_dir)
+            for file_name in os.listdir(self.processed_image_dir):
+                if file_name.startswith("data.pkl"):
+                    file_path = os.path.join(self.processed_image_dir, file_name)
+                    with open(file_path, "rb") as f:
+                        data = pickle.load(f)
+                        self.images.extend(data["images"])
+                        self.diacom_image_statistics.update(data["image_statistics"])
+            
             if not self.crop_to_just_the_knee:
                 if not self.show_both_knees_in_each_image:
                     self.cut_images_in_two() # cut into left + right images. 
@@ -156,7 +157,6 @@ class XRayImageDataset:
                     self.images[i]['cropped_left_knee'] = None
                     self.images[i]['cropped_right_knee'] = None
 
-
             if self.downsample_factor_on_reload is not None:
                 for i in range(len(self.images)):
                     for side in ['left', 'right']:
@@ -169,13 +169,13 @@ class XRayImageDataset:
                         # confusing: open cv resize flips image dimensions, so if image is not a square we have to flip the shape we want. 
                         new_shape = new_shape[::-1] 
                         self.images[i]['%s_knee_scaled_to_zero_one' % side] = cv2.resize(self.images[i]['%s_knee_scaled_to_zero_one' % side],
-                         dsize=tuple(new_shape))
-            self.diacom_image_statistics = reloaded_data['image_statistics']
-            print("Image statistics are", reloaded_data['image_statistics'])
+                        dsize=tuple(new_shape))
+
+            print("Image statistics are", self.diacom_image_statistics)
             self.make_images_RGB_and_zscore() # z-score. The reason we do this AFTER processing is that we don't want to save the image 3x. 
             #self.plot_pipeline_examples(25) # make sanity check plots
             print("Successfully loaded %i images" % len(self.images))
-
+            
     def crop_to_knee(self, dicom_image_path):
         results = self.knee_localizer.predict(dicom_image_path)
         if results is None:
@@ -304,20 +304,16 @@ class XRayImageDataset:
     def save_processed_images(self, image_counter):
         print("Saving processed images to disk...")
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        processed_image_path = "{}_{}_{}.pkl".format(self.processed_image_path, timestamp, image_counter)
-        
-        # Create the directory if it doesn't exist
-        directory = os.path.dirname(processed_image_path)
-        if not os.path.exists(directory):
-            os.makedirs(directory)
+        processed_image_path = os.path.join(self.processed_image_dir, f"data.pkl_{timestamp}_{image_counter}.pkl")
         
         if hasattr(self, 'diacom_image_statistics'):
             data_to_save = {'images': self.images, 'image_statistics': self.diacom_image_statistics}
         else:
             data_to_save = {'images': self.images}
         
-        pickle.dump(data_to_save, open(processed_image_path, 'wb'))
-        print("Successfully saved processed images up to image {}.".format(image_counter))
+        with open(processed_image_path, 'wb') as f:
+            pickle.dump(data_to_save, f)
+        print(f"Successfully saved processed images up to image {image_counter}.")
     def plot_pipeline_examples(self, n_examples):
         """
         plot n_examples random images to make sure pipeline looks ok. 
@@ -936,7 +932,7 @@ def write_out_individual_images_for_one_dataset(write_out_image_data,
                 np.save(image_path, matched_images[i])
                 print("%s image %i/%i written out to %s" % (dataset, i + 1, len(combined_df), image_path))
     print("Successfully wrote out all images.")
-
+    
 def write_out_image_datasets_in_parallel():
     """
     Parallelize the writing out of images since it takes a while. This can be run on rambo. 
