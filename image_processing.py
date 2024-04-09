@@ -874,18 +874,19 @@ def get_base_dir_for_individual_image(dataset,
     return base_dir
         
 
-def write_out_individual_images_for_one_dataset(write_out_image_data, 
-    normalization_method, 
-    show_both_knees_in_each_image, 
-    downsample_factor_on_reload, 
-    seed_to_further_shuffle_train_test_val_sets, 
-    crop_to_just_the_knee):
+def write_out_individual_images_for_one_dataset(write_out_image_data,
+    normalization_method,
+    show_both_knees_in_each_image,
+    downsample_factor_on_reload,
+    seed_to_further_shuffle_train_test_val_sets,
+    crop_to_just_the_knee,
+    batch_size=100):
     """
-    If we actually want to train several neural nets simultaneously, the entire image dataset is too large to fit in memory. 
-    So, after loading the whole image dataset, we also write out each image into a separate file. 
-    We save the images several different ways -- with different preprocessing and downsampling sizes. 
-    Checked. 
-    """    
+    If we actually want to train several neural nets simultaneously, the entire image dataset is too large to fit in memory.
+    So, after loading the whole image dataset, we also write out each image into a separate file.
+    We save the images several different ways -- with different preprocessing and downsampling sizes.
+    Checked.
+    """
     image_dataset_kwargs = copy.deepcopy(IMAGE_DATASET_KWARGS)
     image_dataset_kwargs['reprocess_all_images'] = False
     image_dataset_kwargs['use_small_data'] = False
@@ -894,20 +895,21 @@ def write_out_individual_images_for_one_dataset(write_out_image_data,
     image_dataset_kwargs['show_both_knees_in_each_image'] = show_both_knees_in_each_image
     image_dataset_kwargs['crop_to_just_the_knee'] = crop_to_just_the_knee
     image_dataset = XRayImageDataset(**image_dataset_kwargs)
+
     for dataset in ['train', 'val', 'test', 'BLINDED_HOLD_OUT_DO_NOT_USE']:
         print("Writing out individual images for %s" % dataset)
-        base_path = get_base_dir_for_individual_image(dataset=dataset, 
-                                                      show_both_knees_in_each_image=show_both_knees_in_each_image, 
-                                                      downsample_factor_on_reload=downsample_factor_on_reload, 
-                                                      normalization_method=normalization_method, 
-                                                      seed_to_further_shuffle_train_test_val_sets=seed_to_further_shuffle_train_test_val_sets, 
+        base_path = get_base_dir_for_individual_image(dataset=dataset,
+                                                      show_both_knees_in_each_image=show_both_knees_in_each_image,
+                                                      downsample_factor_on_reload=downsample_factor_on_reload,
+                                                      normalization_method=normalization_method,
+                                                      seed_to_further_shuffle_train_test_val_sets=seed_to_further_shuffle_train_test_val_sets,
                                                       crop_to_just_the_knee=crop_to_just_the_knee)
         if os.path.exists(base_path):
             raise Exception('base path %s should not exist' % base_path)
         time.sleep(3)
 
         while not os.path.exists(base_path):
-            # for some reason this command occasionally fails; make it more robust. 
+            # for some reason this command occasionally fails; make it more robust.
             os.system('mkdir %s' % base_path)
             time.sleep(10)
 
@@ -916,23 +918,46 @@ def write_out_individual_images_for_one_dataset(write_out_image_data,
         else:
             i_promise_i_really_want_to_use_the_blinded_hold_out_set = False
 
-        non_image_dataset = non_image_data_processing.NonImageData(what_dataset_to_use=dataset, 
-                                                                   timepoints_to_filter_for=TIMEPOINTS_TO_FILTER_FOR, 
-                                                                   seed_to_further_shuffle_train_test_val_sets=seed_to_further_shuffle_train_test_val_sets, 
+        non_image_dataset = non_image_data_processing.NonImageData(what_dataset_to_use=dataset,
+                                                                   timepoints_to_filter_for=TIMEPOINTS_TO_FILTER_FOR,
+                                                                   seed_to_further_shuffle_train_test_val_sets=seed_to_further_shuffle_train_test_val_sets,
                                                                    i_promise_i_really_want_to_use_the_blinded_hold_out_set=i_promise_i_really_want_to_use_the_blinded_hold_out_set)
-        combined_df, matched_images, image_codes = match_image_dataset_to_non_image_dataset(image_dataset, non_image_dataset)
-        ensure_barcodes_match(combined_df, image_codes)
-        assert combined_df['visit'].map(lambda x:x in TIMEPOINTS_TO_FILTER_FOR).all()
         
-        non_image_csv_outfile = os.path.join(base_path, 'non_image_data.csv')
-        combined_df.to_csv(non_image_csv_outfile)
-        if write_out_image_data:
-            ensure_barcodes_match(combined_df, image_codes)
-            pickle.dump(image_codes, open(os.path.join(base_path, 'image_codes.pkl'), 'wb'))
-            for i in range(len(combined_df)):
-                image_path = os.path.join(base_path, 'image_%i.npy' % i)
-                np.save(image_path, matched_images[i])
-                print("%s image %i/%i written out to %s" % (dataset, i + 1, len(combined_df), image_path))
+        num_batches = (len(non_image_dataset) + batch_size - 1) // batch_size
+        for batch in range(num_batches):
+            start_idx = batch * batch_size
+            end_idx = min((batch + 1) * batch_size, len(non_image_dataset))
+            
+            non_image_dataset_batch = non_image_dataset[start_idx:end_idx]
+            image_dataset_batch = image_dataset[start_idx:end_idx]
+            
+            combined_df_batch, matched_images_batch, image_codes_batch = match_image_dataset_to_non_image_dataset(image_dataset_batch, non_image_dataset_batch)
+            ensure_barcodes_match(combined_df_batch, image_codes_batch)
+            assert combined_df_batch['visit'].map(lambda x:x in TIMEPOINTS_TO_FILTER_FOR).all()
+            
+            if batch == 0:
+                # Write the header for the CSV file only for the first batch
+                non_image_csv_outfile = os.path.join(base_path, 'non_image_data.csv')
+                combined_df_batch.to_csv(non_image_csv_outfile, index=False, header=True, mode='w')
+            else:
+                # Append subsequent batches to the CSV file without the header
+                combined_df_batch.to_csv(non_image_csv_outfile, index=False, header=False, mode='a')
+            
+            if write_out_image_data:
+                ensure_barcodes_match(combined_df_batch, image_codes_batch)
+                
+                # Append image codes to the existing pickle file
+                with open(os.path.join(base_path, 'image_codes.pkl'), 'ab') as f:
+                    pickle.dump(image_codes_batch, f)
+                
+                for i in range(len(combined_df_batch)):
+                    image_path = os.path.join(base_path, 'image_%i.npy' % (start_idx + i))
+                    np.save(image_path, matched_images_batch[i])
+                    print("%s image %i/%i written out to %s" % (dataset, start_idx + i + 1, len(non_image_dataset), image_path))
+                
+                # Clear the matched_images_batch list for the current batch to free up memory
+                matched_images_batch.clear()
+                
     print("Successfully wrote out all images.")
 
 def write_out_image_datasets_in_parallel():
