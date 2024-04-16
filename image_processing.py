@@ -308,7 +308,8 @@ class XRayImageDataset:
         # 检查目标目录是否存在,如果不存在则创建
         os.makedirs(self.processed_image_dir, exist_ok=True)
         
-        processed_image_path = os.path.join(self.processed_image_dir, "data.pkl_{}_{}".format(timestamp, image_counter))
+        # 构建保存文件的路径，并确保文件名以 .pkl 结尾
+        processed_image_path = os.path.join(self.processed_image_dir, "data_{}_{}.pkl".format(timestamp, image_counter))
         
         data_to_save = {'images': images_to_save, 'image_statistics': image_statistics}
         
