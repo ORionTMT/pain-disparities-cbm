@@ -269,7 +269,7 @@ class XRayImageDataset:
                                 assert os.listdir(image_series_dir) == ['001']
                                 image_path = os.path.join(image_series_dir, '001')
                                 diacom_image = self.load_diacom_file(image_path, 
-                                    desired_image_type=self.desired_image_type)
+                                    desired_image_type=self.desired_image_type, image_counter=image_counter)
 
                                 
                                 if diacom_image is not None:
@@ -393,7 +393,7 @@ class XRayImageDataset:
         new_array = cv2.resize(original_array, dsize=tuple(new_size), interpolation=cv2.INTER_CUBIC)
         return new_array
 
-    def load_diacom_file(self, filename, desired_image_type):
+    def load_diacom_file(self, filename, desired_image_type, image_counter):
         """
         load a matplotlib array from the pydicom file filename. Checked. 
         Drawn heavily from this documentation example: 
@@ -404,7 +404,7 @@ class XRayImageDataset:
         if dataset.SeriesDescription != desired_image_type:
             return None
 
-        print("Image %i" % len(self.images))
+        print("Image %i" % image_counter)
         print("Filename.........:", filename)
         pat_name = dataset.PatientName
         display_name = pat_name.family_name + ", " + pat_name.given_name
