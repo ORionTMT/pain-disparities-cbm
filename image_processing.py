@@ -304,9 +304,10 @@ class XRayImageDataset:
     def save_processed_images(self, images_to_save, image_statistics, image_counter):
         print("Saving processed images to disk...")
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        processed_image_dir = os.path.dirname(self.processed_image_dir)
-        if not os.path.exists(processed_image_dir):
-            os.makedirs(processed_image_dir)
+        
+        # 检查目标目录是否存在,如果不存在则创建
+        os.makedirs(self.processed_image_dir, exist_ok=True)
+        
         processed_image_path = os.path.join(self.processed_image_dir, "data.pkl_{}_{}".format(timestamp, image_counter))
         
         data_to_save = {'images': images_to_save, 'image_statistics': image_statistics}
