@@ -33,7 +33,7 @@ def explore_pickle_structure(directory):
             print("---")
 
 # 指定包含pickle文件的目录路径
-directory_path = '/path/to/your/pickle/directory'
+directory_path = '/home/jacktongmt/NDA/nda-tools/downloadcmd/packages/1225783/processed_image_data'
 
 # 调用函数探索pickle文件的结构
 explore_pickle_structure(directory_path)
