@@ -122,6 +122,7 @@ class XRayImageDataset:
         
         if self.reprocess_all_images:
             print("Reprocessing all images from scratch")
+            print(self.processed_image_dir)
             self.load_all_images() # load images into numpy arrays from dicom
 
             # put images on 0-1 scale. Do this separately for the cropped knee images and the full images. 
