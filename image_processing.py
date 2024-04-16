@@ -304,6 +304,9 @@ class XRayImageDataset:
     def save_processed_images(self, images_to_save, image_statistics, image_counter):
         print("Saving processed images to disk...")
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        processed_image_dir = os.path.dirname(self.processed_image_dir)
+        if not os.path.exists(processed_image_dir):
+            os.makedirs(processed_image_dir)
         processed_image_path = os.path.join(self.processed_image_dir, "data.pkl_{}_{}".format(timestamp, image_counter))
         
         data_to_save = {'images': images_to_save, 'image_statistics': image_statistics}
@@ -311,7 +314,7 @@ class XRayImageDataset:
         with open(processed_image_path, 'wb') as f:
             pickle.dump(data_to_save, f)
         print("Successfully saved processed images up to image {}.".format(image_counter))
-
+        
     def plot_pipeline_examples(self, n_examples):
         """
         plot n_examples random images to make sure pipeline looks ok. 
