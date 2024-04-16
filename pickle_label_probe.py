@@ -18,10 +18,15 @@ def explore_pickle_structure(directory):
             print("Exploring 'images' key (if exists):")
             if 'images' in data:
                 for i, image_data in enumerate(data['images']):
+                    
                     print("Image {} keys:".format(i))
+                    print("length of unnormalized_image_array")
+                    print(len(image_data['unnormalized_image_array']))
+                    print("length of cropped_left_knee")
+                    print(len(image_data['cropped_right_knee']))
                     for key in image_data.keys():
                         print("  - {}".format(key))
-                        print(len(image_data['unnormalized_image_array']))
+                        
                         if isinstance(image_data[key], dict):
                             print("    Subkeys in '{}':".format(key))
                             for subkey in image_data[key].keys():
