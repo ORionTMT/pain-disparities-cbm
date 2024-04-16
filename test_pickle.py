@@ -11,11 +11,11 @@ def check_pickle_files(directory):
             try:
                 data = pickle.load(f)
                 if len(data) == 0:
-                    print(f"Pickle file {file} is empty.")
+                    print("Pickle file {} is empty.".format(file))
                 else:
-                    print(f"Pickle file {file} contains {len(data)} items.")
+                    print("Pickle file {} contains {} items.".format(file, len(data)))
             except EOFError:
-                print(f"Pickle file {file} is empty or corrupted.")
+                print("Pickle file {} is empty or corrupted.".format(file))
 
 # 指定包含pickle文件的目录路径
 directory_path = '/home/jacktongmt/NDA/nda-tools/downloadcmd/packages/1225783/processed_image_data'
