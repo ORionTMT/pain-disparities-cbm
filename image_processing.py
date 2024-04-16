@@ -263,6 +263,8 @@ class XRayImageDataset:
                             if is_xray:
                                 if len(self.images) >= self.max_images_to_load:
                                     print("Loaded the maximum number of images: %i" % len(self.images))
+                                    if len(batch_images) > 0:
+                                        self.save_processed_images(batch_images, self.diacom_image_statistics, image_counter)
                                     return
                                 assert os.listdir(image_series_dir) == ['001']
                                 image_path = os.path.join(image_series_dir, '001')
@@ -293,29 +295,23 @@ class XRayImageDataset:
                                         })
                                     image_counter += 1
                                     if len(batch_images) >= batch_size:
-                                        self.images.extend(batch_images)
-                                        batch_images = []
-                                        self.save_processed_images(image_counter)
-                                        self.images.clear()
+                                        self.save_processed_images(batch_images, self.diacom_image_statistics, image_counter)
+                                        batch_images = []  # Reset batch_images for the next batch
         if len(batch_images) > 0:
-            self.images.extend(batch_images)
-            self.save_processed_images(image_counter)
-            self.images.clear()
-    import os
+            self.save_processed_images(batch_images, self.diacom_image_statistics, image_counter)
 
-    def save_processed_images(self, image_counter):
+
+    def save_processed_images(self, images_to_save, image_statistics, image_counter):
         print("Saving processed images to disk...")
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         processed_image_path = os.path.join(self.processed_image_dir, "data.pkl_{}_{}".format(timestamp, image_counter))
         
-        if hasattr(self, 'diacom_image_statistics'):
-            data_to_save = {'images': self.images, 'image_statistics': self.diacom_image_statistics}
-        else:
-            data_to_save = {'images': self.images}
+        data_to_save = {'images': images_to_save, 'image_statistics': image_statistics}
         
         with open(processed_image_path, 'wb') as f:
             pickle.dump(data_to_save, f)
         print("Successfully saved processed images up to image {}.".format(image_counter))
+
     def plot_pipeline_examples(self, n_examples):
         """
         plot n_examples random images to make sure pipeline looks ok. 
@@ -1201,7 +1197,7 @@ class PytorchImagesDataset(Dataset):
         if self.additional_features_to_predict is not None:
             self.additional_feature_array = copy.deepcopy(self.non_image_data[self.additional_features_to_predict].values)
             for i in range(len(self.additional_features_to_predict)):
-                not_nan = ~np.isnan(self.additional_feature_array[:, i])
+                not_nan = ~np.isfnan(self.additional_feature_array[:, i])
                 std = np.std(self.additional_feature_array[not_nan, i], ddof=1)
                 mu = np.mean(self.additional_feature_array[not_nan, i])
                 print("Z-scoring additional feature %s with mean %2.3f and std %2.3f" % (
