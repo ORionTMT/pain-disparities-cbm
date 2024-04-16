@@ -21,6 +21,7 @@ def explore_pickle_structure(directory):
                     print("Image {} keys:".format(i))
                     for key in image_data.keys():
                         print("  - {}".format(key))
+                        print(len(image_data['unnormalized_image_array']))
                         if isinstance(image_data[key], dict):
                             print("    Subkeys in '{}':".format(key))
                             for subkey in image_data[key].keys():
