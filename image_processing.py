@@ -133,7 +133,7 @@ class XRayImageDataset:
         else:
             print("Loading images from %s" % self.processed_image_dir)
             for file_name in os.listdir(self.processed_image_dir):
-                if file_name.startswith("data.pkl"):
+                if file_name.startswith("data"):
                     file_path = os.path.join(self.processed_image_dir, file_name)
                     with open(file_path, "rb") as f:
                         data = pickle.load(f)
@@ -444,15 +444,20 @@ class XRayImageDataset:
         print("Just analyze cropped knees: %s" % just_normalize_cropped_knees)
 
         all_pixel_arrays = []
-        for i in range(len(self.images)):
-            if just_normalize_cropped_knees:
-                if self.images[i]['cropped_right_knee'] is not None:
-                    all_pixel_arrays.append(self.images[i]['cropped_right_knee'])
-                    all_pixel_arrays.append(self.images[i]['cropped_left_knee'])
-            else:
-                if 'unnormalized_image_array' in self.images[i]:
-                    all_pixel_arrays.append(self.images[i]['unnormalized_image_array'])
-                
+        for file_name in os.listdir(self.processed_image_dir):
+            if file_name.startswith("data"):
+                file_path = os.path.join(self.processed_image_dir, file_name)
+                with open(file_path, "rb") as f:
+                    data = pickle.load(f)
+                    for image_data in data["images"]:
+                        if just_normalize_cropped_knees:
+                            if image_data['cropped_right_knee'] is not None:
+                                all_pixel_arrays.append(image_data['cropped_right_knee'])
+                                all_pixel_arrays.append(image_data['cropped_left_knee'])
+                        else:
+                            if 'unnormalized_image_array' in image_data:
+                                all_pixel_arrays.append(image_data['unnormalized_image_array'])
+                    
         if len(all_pixel_arrays) == 0:
             print("Warning: No valid pixel arrays found. Skipping dataset image statistics computation.")
             return
@@ -467,16 +472,9 @@ class XRayImageDataset:
             suffix = 'full_image'
 
         self.diacom_image_statistics['max_%s' % suffix] = 1.0*arr_max
-
-        for i in range(len(self.images)):
-            if just_normalize_cropped_knees:
-                if self.images[i]['cropped_right_knee'] is not None:
-                    self.images[i]['cropped_right_knee'] = self.images[i]['cropped_right_knee'] / arr_max
-                    self.images[i]['cropped_left_knee'] = self.images[i]['cropped_left_knee'] / arr_max
-            else:
-                self.images[i]['image_array_scaled_to_zero_one'] = self.images[i]['unnormalized_image_array'] / arr_max
         self.diacom_image_statistics['mean_of_zero_one_data_%s' % suffix] = np.mean(all_pixel_arrays) / arr_max
         self.diacom_image_statistics['std_of_zero_one_data_%s' % suffix] = np.std(all_pixel_arrays) / arr_max
+        
         for k in self.diacom_image_statistics.keys():
             print(k, self.diacom_image_statistics[k])
     
