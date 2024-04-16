@@ -10,10 +10,11 @@ def check_pickle_files(directory):
         with open(file_path, 'rb') as f:
             try:
                 data = pickle.load(f)
-                if len(data) == 0:
-                    print("Pickle file {} is empty.".format(file))
+                if 'images' in data:
+                    num_images = len(data['images'])
+                    print("Pickle file {} contains {} images.".format(file, num_images))
                 else:
-                    print("Pickle file {} contains {} items.".format(file, len(data)))
+                    print("Pickle file {} does not contain 'images' key.".format(file))
             except EOFError:
                 print("Pickle file {} is empty or corrupted.".format(file))
 
