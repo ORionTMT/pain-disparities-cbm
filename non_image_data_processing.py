@@ -34,10 +34,10 @@ class NonImageData():
         self.what_dataset_to_use = what_dataset_to_use
         self.clinical_base_dir = os.path.join(BASE_NON_IMAGE_DATA_DIR, 'AllClinical_ASCII')
         self.semiquantitative_xray_dir = os.path.join(BASE_NON_IMAGE_DATA_DIR, 
-            'X-Ray Image Assessments_ASCII', 
+            'X-Ray_Image_Assessments_ASCII', 
             'Semi-Quant Scoring_ASCII')
         self.semiquantitative_mri_dir = os.path.join(BASE_NON_IMAGE_DATA_DIR, 
-            'MR Image Assessment_ASCII', 
+            'MR_Image_Assessment_ASCII', 
             'Semi-Quant Scoring_ASCII')
         self.xray_metadata_dir = os.path.join(BASE_NON_IMAGE_DATA_DIR, 'X-Ray MetaAnalysis_ASCII')
         self.mri_metadata_dir = os.path.join(BASE_NON_IMAGE_DATA_DIR, 'MRI MetaAnalysis_ASCII')
