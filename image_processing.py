@@ -884,6 +884,7 @@ def write_out_individual_images_for_one_dataset(write_out_image_data,
         while not os.path.exists(base_path):
             # for some reason this command occasionally fails; make it more robust. 
             os.system('mkdir %s' % base_path)
+            print("I really get stucked")
             time.sleep(10)
 
         if dataset == 'BLINDED_HOLD_OUT_DO_NOT_USE':
