@@ -66,15 +66,15 @@ class XRayImageDataset:
     Class for loading data.
     """
     def __init__(self, 
-    desired_image_type, 
-    normalization_method, 
-    reprocess_all_images,
-    show_both_knees_in_each_image,
-    crop_to_just_the_knee,
-    make_plot=False,
-    max_images_to_load=None, 
-    use_small_data=False, 
-    downsample_factor_on_reload=None):
+        desired_image_type, 
+        normalization_method, 
+        reprocess_all_images,
+        show_both_knees_in_each_image,
+        crop_to_just_the_knee,
+        make_plot=False,
+        max_images_to_load=None, 
+        use_small_data=False, 
+        downsample_factor_on_reload=None):
         """
         Creates the dataset. 
         desired_image_type: the type of x-ray part you want (for example, Bilateral PA Fixed Flexion Knee)
@@ -106,12 +106,11 @@ class XRayImageDataset:
         self.show_both_knees_in_each_image = show_both_knees_in_each_image
         self.knee_localizer = KneeLocalizer()
         self.crop_to_just_the_knee = crop_to_just_the_knee
-        self.diacom_image_statistics = {}
 
         if use_small_data:
-            self.processed_image_dir = os.path.join(BASE_IMAGE_DATA_DIR, 'processed_image_data', 'small_data')
+            self.processed_image_path = os.path.join(BASE_IMAGE_DATA_DIR, 'processed_image_data', 'small_data.pkl')
         else:
-            self.processed_image_dir = os.path.join(BASE_IMAGE_DATA_DIR, 'processed_image_data')
+            self.processed_image_path = os.path.join(BASE_IMAGE_DATA_DIR, 'processed_image_data', 'data.pkl')
 
         self.extra_margin_for_each_image = 1.1 # how much extra margin to give the left/right images. 
 
@@ -119,30 +118,27 @@ class XRayImageDataset:
             self.max_images_to_load = max_images_to_load
         else:
             self.max_images_to_load = 99999999999
-        
         if self.reprocess_all_images:
             print("Reprocessing all images from scratch")
-            print(self.processed_image_dir)
             self.load_all_images() # load images into numpy arrays from dicom
 
             # put images on 0-1 scale. Do this separately for the cropped knee images and the full images. 
             # Note: it is important to do this for cropped knees separately because they are not on the same scale. 
             # The external package that we uses loads them as 8-bit rather than 16-bit or something. 
+            self.diacom_image_statistics = {}
             self.compute_dataset_image_statistics_and_divide_by_max(just_normalize_cropped_knees=False)
             self.compute_dataset_image_statistics_and_divide_by_max(just_normalize_cropped_knees=True)
-            print("Successfully processed images")
+
+            for i in range(len(self.images)):
+                # don't save extra images
+                self.images[i]['unnormalized_image_array'] = None
+            print("Number of images: %i" % len(self.images))
+            pickle.dump({'images':self.images, 'image_statistics':self.diacom_image_statistics}, open(self.processed_image_path, 'wb'))
+            print("Successfully processed and saved images")
         else:
-            print("Loading images from %s" % self.processed_image_dir)
-            for file_name in os.listdir(self.processed_image_dir):
-                if file_name.startswith("data"):
-                    file_path = os.path.join(self.processed_image_dir, file_name)
-                    with open(file_path, "rb") as f:
-                        data = pickle.load(f)
-                        self.images.extend(data["images"])
-                        if "image_statistics" in data:
-                            self.diacom_image_statistics.update(data["image_statistics"])
-                        
-            
+            print("loading images from %s" % self.processed_image_path)
+            reloaded_data = pickle.load(open(self.processed_image_path, 'rb'))
+            self.images = reloaded_data['images']
             if not self.crop_to_just_the_knee:
                 if not self.show_both_knees_in_each_image:
                     self.cut_images_in_two() # cut into left + right images. 
@@ -160,6 +156,7 @@ class XRayImageDataset:
                     self.images[i]['cropped_left_knee'] = None
                     self.images[i]['cropped_right_knee'] = None
 
+
             if self.downsample_factor_on_reload is not None:
                 for i in range(len(self.images)):
                     for side in ['left', 'right']:
@@ -172,13 +169,13 @@ class XRayImageDataset:
                         # confusing: open cv resize flips image dimensions, so if image is not a square we have to flip the shape we want. 
                         new_shape = new_shape[::-1] 
                         self.images[i]['%s_knee_scaled_to_zero_one' % side] = cv2.resize(self.images[i]['%s_knee_scaled_to_zero_one' % side],
-                        dsize=tuple(new_shape))
-
-            print("Image statistics are", self.diacom_image_statistics)
+                         dsize=tuple(new_shape))
+            self.diacom_image_statistics = reloaded_data['image_statistics']
+            print("Image statistics are", reloaded_data['image_statistics'])
             self.make_images_RGB_and_zscore() # z-score. The reason we do this AFTER processing is that we don't want to save the image 3x. 
             #self.plot_pipeline_examples(25) # make sanity check plots
             print("Successfully loaded %i images" % len(self.images))
-            
+
     def crop_to_knee(self, dicom_image_path):
         results = self.knee_localizer.predict(dicom_image_path)
         if results is None:
@@ -209,9 +206,6 @@ class XRayImageDataset:
         """
         loop over the nested subfolders + load images. 
         """
-        batch_size=100
-        batch_images = []
-        image_counter = 0
         for timepoint_dir in get_directories(BASE_IMAGE_DATA_DIR):
             if timepoint_dir not in IMAGE_TIMEPOINT_DIRS_TO_FOLLOWUP:
                 continue
@@ -233,6 +227,7 @@ class XRayImageDataset:
                     assert len(get_directories(base_dir_for_timepoint)) == 1
                 else:
                     assert cohort_folder.split('.')[1] in ['C', 'E']
+                    assert len(get_directories(base_dir_for_timepoint)) == 2
                 participants = get_directories(os.path.join(base_dir_for_timepoint, 
                                                             cohort_folder))
                 for participant in participants:
@@ -264,13 +259,11 @@ class XRayImageDataset:
                             if is_xray:
                                 if len(self.images) >= self.max_images_to_load:
                                     print("Loaded the maximum number of images: %i" % len(self.images))
-                                    if len(batch_images) > 0:
-                                        self.save_processed_images(batch_images, self.diacom_image_statistics, image_counter)
                                     return
                                 assert os.listdir(image_series_dir) == ['001']
                                 image_path = os.path.join(image_series_dir, '001')
                                 diacom_image = self.load_diacom_file(image_path, 
-                                    desired_image_type=self.desired_image_type, image_counter=image_counter)
+                                    desired_image_type=self.desired_image_type)
 
                                 
                                 if diacom_image is not None:
@@ -279,7 +272,7 @@ class XRayImageDataset:
                                         print("Warning: unable to crop knee image.")
 
                                     image_array = self.get_resized_pixel_array_from_dicom_image(diacom_image)
-                                    batch_images.append({'timepoint_dir':timepoint_dir, 
+                                    self.images.append({'timepoint_dir':timepoint_dir, 
                                         'full_path':image_path,
                                         'cohort_folder':cohort_folder, 
                                         'visit':diacom_image.ClinicalTrialTimePointDescription,
@@ -294,30 +287,6 @@ class XRayImageDataset:
                                         # Users may also want to identify the specific image that was assessed to generate the data for an anatomic site and time point and merge the image assessment data with meta-data about that image (please see Appendix D for example SAS code). Individual images (radiographs, MRI series) are identified by a unique barcode. The barcode is recorded in the AccessionNumber in the DICOM header of the image.
                                         'barcode':diacom_image.AccessionNumber
                                         })
-                                    image_counter += 1
-                                    if len(batch_images) >= batch_size:
-                                        self.save_processed_images(batch_images, self.diacom_image_statistics, image_counter)
-                                        batch_images = []  # Reset batch_images for the next batch
-        if len(batch_images) > 0:
-            self.save_processed_images(batch_images, self.diacom_image_statistics, image_counter)
-
-
-    def save_processed_images(self, images_to_save, image_statistics, image_counter):
-        print("Saving processed images to disk...")
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        
-        # 检查目标目录是否存在,如果不存在则创建
-        os.makedirs(self.processed_image_dir, exist_ok=True)
-        
-        # 构建保存文件的路径，并确保文件名以 .pkl 结尾
-        processed_image_path = os.path.join(self.processed_image_dir, "data_{}_{}.pkl".format(timestamp, image_counter))
-        
-        data_to_save = {'images': images_to_save, 'image_statistics': image_statistics}
-        
-        with open(processed_image_path, 'wb') as f:
-            pickle.dump(data_to_save, f)
-        print("Successfully saved processed images up to image {}.".format(image_counter))
-        
     def plot_pipeline_examples(self, n_examples):
         """
         plot n_examples random images to make sure pipeline looks ok. 
@@ -396,7 +365,7 @@ class XRayImageDataset:
         new_array = cv2.resize(original_array, dsize=tuple(new_size), interpolation=cv2.INTER_CUBIC)
         return new_array
 
-    def load_diacom_file(self, filename, desired_image_type, image_counter):
+    def load_diacom_file(self, filename, desired_image_type):
         """
         load a matplotlib array from the pydicom file filename. Checked. 
         Drawn heavily from this documentation example: 
@@ -407,7 +376,7 @@ class XRayImageDataset:
         if dataset.SeriesDescription != desired_image_type:
             return None
 
-        print("Image %i" % image_counter)
+        print("Image %i" % len(self.images))
         print("Filename.........:", filename)
         pat_name = dataset.PatientName
         display_name = pat_name.family_name + ", " + pat_name.given_name
@@ -441,30 +410,29 @@ class XRayImageDataset:
         return arr
 
     def compute_dataset_image_statistics_and_divide_by_max(self, just_normalize_cropped_knees):
+        """
+        Put images into the zero-one range by dividing by the maximum value. 
+        Also compute statistics of the images: mean and std. 
+
+        Note: it is important to do this for cropped knees separately because they are not on the same scale. 
+        The external package that we uses loads them as 8-bit rather than 16-bit or something. 
+
+        Checked. 
+        """
         print("\n\nNow computing overall dataset statistics")
         print("Just analyze cropped knees: %s" % just_normalize_cropped_knees)
 
         all_pixel_arrays = []
-        for file_name in os.listdir(self.processed_image_dir):
-            if file_name.startswith("data"):
-                file_path = os.path.join(self.processed_image_dir, file_name)
-                with open(file_path, "rb") as f:
-                    data = pickle.load(f)
-                    for image_data in data["images"]:
-                        if just_normalize_cropped_knees:
-                            if image_data['cropped_right_knee'] is not None:
-                                all_pixel_arrays.append(image_data['cropped_right_knee'])
-                                all_pixel_arrays.append(image_data['cropped_left_knee'])
-                        else:
-                            if 'unnormalized_image_array' in image_data:
-                                all_pixel_arrays.append(image_data['unnormalized_image_array'])
-                    
-        if len(all_pixel_arrays) == 0:
-            print("Warning: No valid pixel arrays found. Skipping dataset image statistics computation.")
-            return
-        
+        for i in range(len(self.images)):
+            if just_normalize_cropped_knees:
+                if self.images[i]['cropped_right_knee'] is not None:
+                    all_pixel_arrays.append(self.images[i]['cropped_right_knee'])
+                    all_pixel_arrays.append(self.images[i]['cropped_left_knee'])
+            else:
+                all_pixel_arrays.append(self.images[i]['unnormalized_image_array'])
+                
         all_pixel_arrays = np.array(all_pixel_arrays)
-        arr_max = np.max(all_pixel_arrays)
+        arr_max =  np.max(all_pixel_arrays)
         assert np.min(all_pixel_arrays) >= 0
         
         if just_normalize_cropped_knees:
@@ -473,9 +441,16 @@ class XRayImageDataset:
             suffix = 'full_image'
 
         self.diacom_image_statistics['max_%s' % suffix] = 1.0*arr_max
+
+        for i in range(len(self.images)):
+            if just_normalize_cropped_knees:
+                if self.images[i]['cropped_right_knee'] is not None:
+                    self.images[i]['cropped_right_knee'] = self.images[i]['cropped_right_knee'] / arr_max
+                    self.images[i]['cropped_left_knee'] = self.images[i]['cropped_left_knee'] / arr_max
+            else:
+                self.images[i]['image_array_scaled_to_zero_one'] = self.images[i]['unnormalized_image_array'] / arr_max
         self.diacom_image_statistics['mean_of_zero_one_data_%s' % suffix] = np.mean(all_pixel_arrays) / arr_max
         self.diacom_image_statistics['std_of_zero_one_data_%s' % suffix] = np.std(all_pixel_arrays) / arr_max
-        
         for k in self.diacom_image_statistics.keys():
             print(k, self.diacom_image_statistics[k])
     
@@ -874,19 +849,18 @@ def get_base_dir_for_individual_image(dataset,
     return base_dir
         
 
-def write_out_individual_images_for_one_dataset(write_out_image_data,
-    normalization_method,
-    show_both_knees_in_each_image,
-    downsample_factor_on_reload,
-    seed_to_further_shuffle_train_test_val_sets,
-    crop_to_just_the_knee,
-    batch_size=100):
+def write_out_individual_images_for_one_dataset(write_out_image_data, 
+    normalization_method, 
+    show_both_knees_in_each_image, 
+    downsample_factor_on_reload, 
+    seed_to_further_shuffle_train_test_val_sets, 
+    crop_to_just_the_knee):
     """
-    If we actually want to train several neural nets simultaneously, the entire image dataset is too large to fit in memory.
-    So, after loading the whole image dataset, we also write out each image into a separate file.
-    We save the images several different ways -- with different preprocessing and downsampling sizes.
-    Checked.
-    """
+    If we actually want to train several neural nets simultaneously, the entire image dataset is too large to fit in memory. 
+    So, after loading the whole image dataset, we also write out each image into a separate file. 
+    We save the images several different ways -- with different preprocessing and downsampling sizes. 
+    Checked. 
+    """    
     image_dataset_kwargs = copy.deepcopy(IMAGE_DATASET_KWARGS)
     image_dataset_kwargs['reprocess_all_images'] = False
     image_dataset_kwargs['use_small_data'] = False
@@ -895,21 +869,20 @@ def write_out_individual_images_for_one_dataset(write_out_image_data,
     image_dataset_kwargs['show_both_knees_in_each_image'] = show_both_knees_in_each_image
     image_dataset_kwargs['crop_to_just_the_knee'] = crop_to_just_the_knee
     image_dataset = XRayImageDataset(**image_dataset_kwargs)
-
     for dataset in ['train', 'val', 'test', 'BLINDED_HOLD_OUT_DO_NOT_USE']:
         print("Writing out individual images for %s" % dataset)
-        base_path = get_base_dir_for_individual_image(dataset=dataset,
-                                                      show_both_knees_in_each_image=show_both_knees_in_each_image,
-                                                      downsample_factor_on_reload=downsample_factor_on_reload,
-                                                      normalization_method=normalization_method,
-                                                      seed_to_further_shuffle_train_test_val_sets=seed_to_further_shuffle_train_test_val_sets,
+        base_path = get_base_dir_for_individual_image(dataset=dataset, 
+                                                      show_both_knees_in_each_image=show_both_knees_in_each_image, 
+                                                      downsample_factor_on_reload=downsample_factor_on_reload, 
+                                                      normalization_method=normalization_method, 
+                                                      seed_to_further_shuffle_train_test_val_sets=seed_to_further_shuffle_train_test_val_sets, 
                                                       crop_to_just_the_knee=crop_to_just_the_knee)
         if os.path.exists(base_path):
             raise Exception('base path %s should not exist' % base_path)
         time.sleep(3)
 
         while not os.path.exists(base_path):
-            # for some reason this command occasionally fails; make it more robust.
+            # for some reason this command occasionally fails; make it more robust. 
             os.system('mkdir %s' % base_path)
             time.sleep(10)
 
@@ -918,46 +891,23 @@ def write_out_individual_images_for_one_dataset(write_out_image_data,
         else:
             i_promise_i_really_want_to_use_the_blinded_hold_out_set = False
 
-        non_image_dataset = non_image_data_processing.NonImageData(what_dataset_to_use=dataset,
-                                                                   timepoints_to_filter_for=TIMEPOINTS_TO_FILTER_FOR,
-                                                                   seed_to_further_shuffle_train_test_val_sets=seed_to_further_shuffle_train_test_val_sets,
+        non_image_dataset = non_image_data_processing.NonImageData(what_dataset_to_use=dataset, 
+                                                                   timepoints_to_filter_for=TIMEPOINTS_TO_FILTER_FOR, 
+                                                                   seed_to_further_shuffle_train_test_val_sets=seed_to_further_shuffle_train_test_val_sets, 
                                                                    i_promise_i_really_want_to_use_the_blinded_hold_out_set=i_promise_i_really_want_to_use_the_blinded_hold_out_set)
+        combined_df, matched_images, image_codes = match_image_dataset_to_non_image_dataset(image_dataset, non_image_dataset)
+        ensure_barcodes_match(combined_df, image_codes)
+        assert combined_df['visit'].map(lambda x:x in TIMEPOINTS_TO_FILTER_FOR).all()
         
-        num_batches = (len(non_image_dataset) + batch_size - 1) // batch_size
-        for batch in range(num_batches):
-            start_idx = batch * batch_size
-            end_idx = min((batch + 1) * batch_size, len(non_image_dataset))
-            
-            non_image_dataset_batch = non_image_dataset[start_idx:end_idx]
-            image_dataset_batch = image_dataset[start_idx:end_idx]
-            
-            combined_df_batch, matched_images_batch, image_codes_batch = match_image_dataset_to_non_image_dataset(image_dataset_batch, non_image_dataset_batch)
-            ensure_barcodes_match(combined_df_batch, image_codes_batch)
-            assert combined_df_batch['visit'].map(lambda x:x in TIMEPOINTS_TO_FILTER_FOR).all()
-            
-            if batch == 0:
-                # Write the header for the CSV file only for the first batch
-                non_image_csv_outfile = os.path.join(base_path, 'non_image_data.csv')
-                combined_df_batch.to_csv(non_image_csv_outfile, index=False, header=True, mode='w')
-            else:
-                # Append subsequent batches to the CSV file without the header
-                combined_df_batch.to_csv(non_image_csv_outfile, index=False, header=False, mode='a')
-            
-            if write_out_image_data:
-                ensure_barcodes_match(combined_df_batch, image_codes_batch)
-                
-                # Append image codes to the existing pickle file
-                with open(os.path.join(base_path, 'image_codes.pkl'), 'ab') as f:
-                    pickle.dump(image_codes_batch, f)
-                
-                for i in range(len(combined_df_batch)):
-                    image_path = os.path.join(base_path, 'image_%i.npy' % (start_idx + i))
-                    np.save(image_path, matched_images_batch[i])
-                    print("%s image %i/%i written out to %s" % (dataset, start_idx + i + 1, len(non_image_dataset), image_path))
-                
-                # Clear the matched_images_batch list for the current batch to free up memory
-                matched_images_batch.clear()
-                
+        non_image_csv_outfile = os.path.join(base_path, 'non_image_data.csv')
+        combined_df.to_csv(non_image_csv_outfile)
+        if write_out_image_data:
+            ensure_barcodes_match(combined_df, image_codes)
+            pickle.dump(image_codes, open(os.path.join(base_path, 'image_codes.pkl'), 'wb'))
+            for i in range(len(combined_df)):
+                image_path = os.path.join(base_path, 'image_%i.npy' % i)
+                np.save(image_path, matched_images[i])
+                print("%s image %i/%i written out to %s" % (dataset, i + 1, len(combined_df), image_path))
     print("Successfully wrote out all images.")
 
 def write_out_image_datasets_in_parallel():
@@ -1201,7 +1151,7 @@ class PytorchImagesDataset(Dataset):
         if self.additional_features_to_predict is not None:
             self.additional_feature_array = copy.deepcopy(self.non_image_data[self.additional_features_to_predict].values)
             for i in range(len(self.additional_features_to_predict)):
-                not_nan = ~np.isfnan(self.additional_feature_array[:, i])
+                not_nan = ~np.isnan(self.additional_feature_array[:, i])
                 std = np.std(self.additional_feature_array[not_nan, i], ddof=1)
                 mu = np.mean(self.additional_feature_array[not_nan, i])
                 print("Z-scoring additional feature %s with mean %2.3f and std %2.3f" % (
@@ -1398,5 +1348,3 @@ if __name__ == '__main__':
 
     
 
-
- 
