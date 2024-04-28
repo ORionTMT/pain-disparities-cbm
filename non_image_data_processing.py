@@ -39,8 +39,8 @@ class NonImageData():
         self.semiquantitative_mri_dir = os.path.join(BASE_NON_IMAGE_DATA_DIR, 
             'MR_Image_Assessment_ASCII', 
             'Semi-Quant Scoring_ASCII')
-        self.xray_metadata_dir = os.path.join(BASE_NON_IMAGE_DATA_DIR, 'X-Ray MetaAnalysis_ASCII')
-        self.mri_metadata_dir = os.path.join(BASE_NON_IMAGE_DATA_DIR, 'MRI MetaAnalysis_ASCII')
+        self.xray_metadata_dir = os.path.join(BASE_NON_IMAGE_DATA_DIR, 'X-Ray_MetaAnalysis_ASCII')
+        self.mri_metadata_dir = os.path.join(BASE_NON_IMAGE_DATA_DIR, 'MRI_MetaAnalysis_ASCII')
         self.original_dataframes = {} # store the original CSVs
         self.processed_dataframes = {} # store the processed data
         self.col_mappings = {}
