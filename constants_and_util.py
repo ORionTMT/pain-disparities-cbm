@@ -33,7 +33,7 @@ N_BOOTSTRAPS = 1000
 
 if getpass.getuser() == 'emmap1':
     # Do not modify this code; it is the original logic the authors used to process the images/run models, maintained for reproducibility.
-    REPROCESS_RAW_DATA = False # set this to False if you just want to work with the processed data, and don't need to reprocess it. 
+    REPROCESS_RAW_DATA = True # set this to False if you just want to work with the processed data, and don't need to reprocess it. 
     assert node_name in ['hyperion', 'hyperion2', 'hyperion3', 'rambo', 'trinity', 'turing1', 'turing2']
     assert sys.version.split()[0] == '3.5.2'
     NODE_TO_USE_TO_STORE_IMAGES_FOR_GPU = 'hyperion3'
@@ -74,7 +74,7 @@ else:
     
     # Only need to set these paths if you are reprocessing raw data. 
     BASE_NON_IMAGE_DATA_DIR = '/home/jacktongmt/NDA/nonImage' # Set this path to point to the directory where you downloaded the NON-IMAGE OAI data - eg, it should contain folders like "AllClinical_ASCII". 
-    BASE_IMAGE_DATA_DIR = '/home/jacktongmt/NDA/nda-tools/downloadcmd/packages/1225783' # Set this path to point to the directory where you downloaded the IMAGE OAI data - eg, it should contain folders like "00m" for each timepoint. 
+    BASE_IMAGE_DATA_DIR = '/home/jacktongmt/NDA/nda-tools/downloadcmd/packages/1225784' # Set this path to point to the directory where you downloaded the IMAGE OAI data - eg, it should contain folders like "00m" for each timepoint. 
 
 assert os.path.exists(INDIVIDUAL_IMAGES_PATH), 'You need to set INDIVIDUAL_IMAGES_PATH; see "Please set these paths for your system" comment in constants_and_util.py'
 assert os.path.exists(FITTED_MODEL_DIR), 'You need to set FITTED_MODEL_DIR; see "Please set these paths for your system" comment in constants_and_util.py. After setting this directory, please create empty subdirectories called "configs", "results", and "model_weights" within it'
