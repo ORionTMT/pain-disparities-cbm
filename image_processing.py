@@ -877,9 +877,7 @@ def write_out_individual_images_for_one_dataset(write_out_image_data,
                                                       normalization_method=normalization_method, 
                                                       seed_to_further_shuffle_train_test_val_sets=seed_to_further_shuffle_train_test_val_sets, 
                                                       crop_to_just_the_knee=crop_to_just_the_knee)
-        if os.path.exists(base_path):
-            raise Exception('base path %s should not exist' % base_path)
-        time.sleep(3)
+        
 
         while not os.path.exists(base_path):
             # for some reason this command occasionally fails; make it more robust. 
