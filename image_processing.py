@@ -227,7 +227,7 @@ class XRayImageDataset:
                     assert len(get_directories(base_dir_for_timepoint)) == 1
                 else:
                     assert cohort_folder.split('.')[1] in ['C', 'E']
-                    assert len(get_directories(base_dir_for_timepoint)) == 4
+                    assert len(get_directories(base_dir_for_timepoint)) == 2
                 participants = get_directories(os.path.join(base_dir_for_timepoint, 
                                                             cohort_folder))
                 for participant in participants:
