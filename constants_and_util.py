@@ -33,7 +33,7 @@ N_BOOTSTRAPS = 1000
 
 if getpass.getuser() == 'emmap1':
     # Do not modify this code; it is the original logic the authors used to process the images/run models, maintained for reproducibility.
-    REPROCESS_RAW_DATA = True # set this to False if you just want to work with the processed data, and don't need to reprocess it. 
+    REPROCESS_RAW_DATA = False # set this to False if you just want to work with the processed data, and don't need to reprocess it. 
     assert node_name in ['hyperion', 'hyperion2', 'hyperion3', 'rambo', 'trinity', 'turing1', 'turing2']
     assert sys.version.split()[0] == '3.5.2'
     NODE_TO_USE_TO_STORE_IMAGES_FOR_GPU = 'hyperion3'
