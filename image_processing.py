@@ -432,7 +432,12 @@ class XRayImageDataset:
                 all_pixel_arrays.append(self.images[i]['unnormalized_image_array'])
                 
         all_pixel_arrays = np.array(all_pixel_arrays)
-        arr_max =  np.max(all_pixel_arrays)
+        if all_pixel_arrays.size > 0:
+            arr_max = np.max(all_pixel_arrays)
+        else:
+            print("Warning: No data available in all_pixel_arrays")
+            arr_max = 0  # or appropriate default/fallback value
+
         assert np.min(all_pixel_arrays) >= 0
         
         if just_normalize_cropped_knees:
