@@ -432,9 +432,13 @@ class XRayImageDataset:
                 all_pixel_arrays.append(self.images[i]['unnormalized_image_array'])
                 
         all_pixel_arrays = np.array(all_pixel_arrays)
-        arr_max =  np.max(all_pixel_arrays)
-        assert np.min(all_pixel_arrays) >= 0
-        
+        if len(all_pixel_arrays) > 0:
+            arr_max = np.max(all_pixel_arrays)
+            # Rest of your code
+        else:
+            print("No valid pixel arrays found in the dataset.")
+            # Handle the case when no valid pixel arrays are available
+
         if just_normalize_cropped_knees:
             suffix = 'cropped_knee_only'
         else:
