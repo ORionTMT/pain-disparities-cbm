@@ -432,16 +432,9 @@ class XRayImageDataset:
                 all_pixel_arrays.append(self.images[i]['unnormalized_image_array'])
                 
         all_pixel_arrays = np.array(all_pixel_arrays)
-        if len(all_pixel_arrays) > 0:
-            arr_max = np.max(all_pixel_arrays)
-            arr_mean = np.mean(all_pixel_arrays)
-            arr_std = np.std(all_pixel_arrays)
-        else:
-            print("No valid pixel arrays found in the dataset.")
-            arr_max = 1.0  # Assign a default value to arr_max
-            arr_mean = 0.0  # Assign a default value to arr_mean
-            arr_std = 1.0  # Assign a default value to arr_std
-
+        arr_max =  np.max(all_pixel_arrays)
+        assert np.min(all_pixel_arrays) >= 0
+        
         if just_normalize_cropped_knees:
             suffix = 'cropped_knee_only'
         else:
@@ -1354,4 +1347,3 @@ if __name__ == '__main__':
     #compare_contents_files_to_loaded_images(image_dataset, IMAGE_DATASET_KWARGS['desired_image_type'])
 
     
-
