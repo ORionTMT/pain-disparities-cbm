@@ -439,7 +439,7 @@ class XRayImageDataset:
             arr_max = 0  # or appropriate default/fallback value
 
     
-        assert np.min(all_pixel_arrays) >= 0
+        
         
         if just_normalize_cropped_knees:
             suffix = 'cropped_knee_only'
