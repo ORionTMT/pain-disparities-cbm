@@ -434,10 +434,13 @@ class XRayImageDataset:
         all_pixel_arrays = np.array(all_pixel_arrays)
         if len(all_pixel_arrays) > 0:
             arr_max = np.max(all_pixel_arrays)
-            # Rest of your code
+            arr_mean = np.mean(all_pixel_arrays)
+            arr_std = np.std(all_pixel_arrays)
         else:
             print("No valid pixel arrays found in the dataset.")
-            # Handle the case when no valid pixel arrays are available
+            arr_max = 1.0  # Assign a default value to arr_max
+            arr_mean = 0.0  # Assign a default value to arr_mean
+            arr_std = 1.0  # Assign a default value to arr_std
 
         if just_normalize_cropped_knees:
             suffix = 'cropped_knee_only'
