@@ -432,14 +432,8 @@ class XRayImageDataset:
                 all_pixel_arrays.append(self.images[i]['unnormalized_image_array'])
                 
         all_pixel_arrays = np.array(all_pixel_arrays)
-        if all_pixel_arrays.size > 0:
-            arr_max = np.max(all_pixel_arrays)
-        else:
-            print("Warning: No data available in all_pixel_arrays")
-            arr_max = 0  # or appropriate default/fallback value
-
-    
-        
+        arr_max =  np.max(all_pixel_arrays)
+        assert np.min(all_pixel_arrays) >= 0
         
         if just_normalize_cropped_knees:
             suffix = 'cropped_knee_only'
@@ -883,12 +877,13 @@ def write_out_individual_images_for_one_dataset(write_out_image_data,
                                                       normalization_method=normalization_method, 
                                                       seed_to_further_shuffle_train_test_val_sets=seed_to_further_shuffle_train_test_val_sets, 
                                                       crop_to_just_the_knee=crop_to_just_the_knee)
-        
+        if os.path.exists(base_path):
+            raise Exception('base path %s should not exist' % base_path)
+        time.sleep(3)
 
         while not os.path.exists(base_path):
             # for some reason this command occasionally fails; make it more robust. 
             os.system('mkdir %s' % base_path)
-            print("I really get stucked")
             time.sleep(10)
 
         if dataset == 'BLINDED_HOLD_OUT_DO_NOT_USE':
@@ -897,24 +892,23 @@ def write_out_individual_images_for_one_dataset(write_out_image_data,
             i_promise_i_really_want_to_use_the_blinded_hold_out_set = False
 
         non_image_dataset = non_image_data_processing.NonImageData(what_dataset_to_use=dataset, 
-                                                                timepoints_to_filter_for=TIMEPOINTS_TO_FILTER_FOR, 
-                                                                seed_to_further_shuffle_train_test_val_sets=seed_to_further_shuffle_train_test_val_sets, 
-                                                                i_promise_i_really_want_to_use_the_blinded_hold_out_set=i_promise_i_really_want_to_use_the_blinded_hold_out_set)
-
-        combined_df, image_codes = match_image_dataset_to_non_image_dataset(image_dataset, non_image_dataset, base_path)
-
+                                                                   timepoints_to_filter_for=TIMEPOINTS_TO_FILTER_FOR, 
+                                                                   seed_to_further_shuffle_train_test_val_sets=seed_to_further_shuffle_train_test_val_sets, 
+                                                                   i_promise_i_really_want_to_use_the_blinded_hold_out_set=i_promise_i_really_want_to_use_the_blinded_hold_out_set)
+        combined_df, matched_images, image_codes = match_image_dataset_to_non_image_dataset(image_dataset, non_image_dataset)
         ensure_barcodes_match(combined_df, image_codes)
-        assert combined_df['visit'].map(lambda x: x in TIMEPOINTS_TO_FILTER_FOR).all()
-
+        assert combined_df['visit'].map(lambda x:x in TIMEPOINTS_TO_FILTER_FOR).all()
+        
         non_image_csv_outfile = os.path.join(base_path, 'non_image_data.csv')
         combined_df.to_csv(non_image_csv_outfile)
-
         if write_out_image_data:
             ensure_barcodes_match(combined_df, image_codes)
             pickle.dump(image_codes, open(os.path.join(base_path, 'image_codes.pkl'), 'wb'))
-            print("Matched images saved to disk at: %s" % base_path)
-
-        print("Successfully wrote out all images.")
+            for i in range(len(combined_df)):
+                image_path = os.path.join(base_path, 'image_%i.npy' % i)
+                np.save(image_path, matched_images[i])
+                print("%s image %i/%i written out to %s" % (dataset, i + 1, len(combined_df), image_path))
+    print("Successfully wrote out all images.")
 
 def write_out_image_datasets_in_parallel():
     """
@@ -1353,3 +1347,4 @@ if __name__ == '__main__':
     #compare_contents_files_to_loaded_images(image_dataset, IMAGE_DATASET_KWARGS['desired_image_type'])
 
     
+
