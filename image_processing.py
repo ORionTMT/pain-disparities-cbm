@@ -373,8 +373,7 @@ class XRayImageDataset:
         """
         dataset = pydicom.dcmread(filename)
         
-        if dataset.SeriesDescription != desired_image_type:
-            return None
+        
 
         print("Image %i" % len(self.images))
         print("Filename.........:", filename)
