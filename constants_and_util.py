@@ -66,7 +66,7 @@ else:
     # Please modify variables / paths here. 
     if sys.version.split()[0] != '3.5.2':
         print("Warning: running code with a Python version which differs from original Python version (3.5.2)")
-    REPROCESS_RAW_DATA = True # set this to False if you just want to work with the processed data, and don't need to reprocess it. 
+    REPROCESS_RAW_DATA = False # set this to False if you just want to work with the processed data, and don't need to reprocess it. 
     
     # Please set these paths for your system. 
     INDIVIDUAL_IMAGES_PATH = '/home/jacktongmt/pain-disparities-cbm/processed_data_00m' # points to the directory which stores the processed data, so you should download the processed data into this folder. If you are reprocessing the raw data, the individual images will be stored in this folder. 
@@ -74,7 +74,7 @@ else:
     
     # Only need to set these paths if you are reprocessing raw data. 
     BASE_NON_IMAGE_DATA_DIR = '/home/jacktongmt/NDA/nonImage' # Set this path to point to the directory where you downloaded the NON-IMAGE OAI data - eg, it should contain folders like "AllClinical_ASCII". 
-    BASE_IMAGE_DATA_DIR = '/home/jacktongmt/NDA/nda-tools/downloadcmd/packages/113730' # Set this path to point to the directory where you downloaded the IMAGE OAI data - eg, it should contain folders like "00m" for each timepoint. 
+    BASE_IMAGE_DATA_DIR = '/home/jacktongmt/NDA/nda-tools/downloadcmd/packages/1228078' # Set this path to point to the directory where you downloaded the IMAGE OAI data - eg, it should contain folders like "00m" for each timepoint. 
 
 assert os.path.exists(INDIVIDUAL_IMAGES_PATH), 'You need to set INDIVIDUAL_IMAGES_PATH; see "Please set these paths for your system" comment in constants_and_util.py'
 assert os.path.exists(FITTED_MODEL_DIR), 'You need to set FITTED_MODEL_DIR; see "Please set these paths for your system" comment in constants_and_util.py. After setting this directory, please create empty subdirectories called "configs", "results", and "model_weights" within it'
@@ -497,65 +497,66 @@ def ensure_barcodes_match(combined_df, image_codes):
             raise Exception("Barcode mismatch at index %i, %s != %s" % (idx, image_codes[idx], code_in_df))
     print("All %i barcodes line up." % len(combined_df))
 
-def match_image_dataset_to_non_image_dataset(image_dataset, non_image_dataset, swap_left_and_right=False):
+def match_image_dataset_to_non_image_dataset(image_dataset, non_image_dataset, base_path, swap_left_and_right=False):
     """
-    Given an image dataset + a non-image dataset, returns
-    a) a dataframe of clinical ratings and 
-    b) a list of images which correspond to the clinical ratings
-    There should be no missing data in either. 
-    Checked. 
+    Given an image dataset + a non-image dataset, matches the images to the clinical ratings
+    and saves the matched images to disk. Returns a DataFrame of clinical ratings and a list
+    of image codes corresponding to the matched images.
     """
-
     # Filter for clinical assessments for images that pass QC.
     clinical_assessments = copy.deepcopy(non_image_dataset.processed_dataframes['kxr_sq_bu'])
-    assert clinical_assessments['barcdbu'].map(lambda x:len(x) == 12).all()
+    assert clinical_assessments['barcdbu'].map(lambda x: len(x) == 12).all()
     print(clinical_assessments.head())
     print("Prior to filtering for images that pass QC, %i images" % len(clinical_assessments))
+
     acceptable_barcodes = find_image_barcodes_that_pass_qc(non_image_dataset)
-    clinical_assessments = clinical_assessments.loc[clinical_assessments['barcdbu'].map(lambda x:x in acceptable_barcodes)]
-    print("After filtering for images that pass QC, %i images" % len(clinical_assessments)) # this doesn't filter out a lot of clinical assessments, even though a lot of values in the xray01 etc datasets are NA, because those values are already filtered out of the kxr_sq_bu -- you can't assign image scores to an image which isn't available. 
-    
+    clinical_assessments = clinical_assessments.loc[clinical_assessments['barcdbu'].map(lambda x: x in acceptable_barcodes)]
+    print("After filtering for images that pass QC, %i images" % len(clinical_assessments))
+
     combined_df = get_combined_dataframe(non_image_dataset, clinical_assessments)
+
     non_image_keys = list(combined_df['barcdbu'].map(str) + '*' + combined_df['side'])
     non_image_keys = dict(zip(non_image_keys, range(len(non_image_keys))))
-    matched_images = [None for i in range(len(combined_df))]
+
     image_codes = [None for i in range(len(combined_df))]
+
     for i in range(len(image_dataset.images)):
         if i % 1000 == 0:
             print('Image %i/%i' % (i, len(image_dataset.images)))
+
         image = image_dataset.images[i]
         if not swap_left_and_right:
             left_key = str(image['barcode']) + '*left'
-            right_key = str(image['barcode'])  + '*right'
+            right_key = str(image['barcode']) + '*right'
         else:
             right_key = str(image['barcode']) + '*left'
-            left_key = str(image['barcode'])  + '*right'
-        if left_key in non_image_keys: 
+            left_key = str(image['barcode']) + '*right'
+
+        if left_key in non_image_keys:
             idx = non_image_keys[left_key]
-            assert matched_images[idx] is None
-            matched_images[idx] = image['left_knee'].copy()
+            image_path = os.path.join(base_path, 'image_%i.npy' % idx)
+            np.save(image_path, image['left_knee'])
             image_codes[idx] = left_key
+
         if right_key in non_image_keys:
             idx = non_image_keys[right_key]
-            assert matched_images[idx] is None
-            matched_images[idx] = image['right_knee'].copy()
+            image_path = os.path.join(base_path, 'image_%i.npy' % idx)
+            np.save(image_path, image['right_knee'])
             image_codes[idx] = right_key
-    combined_df['has_matched_image'] = [a is not None for a in matched_images]
+
+    combined_df['has_matched_image'] = [code is not None for code in image_codes]
     print("Fraction of clinical x-ray ratings with matched images")
     print(combined_df[['has_matched_image', 'visit', 'side']].groupby(['visit', 'side']).agg(['mean', 'sum']))
-    idxs_to_keep = []
-    for i in range(len(combined_df)):
-        if combined_df['has_matched_image'].values[i]:
-            idxs_to_keep.append(i)
+
+    idxs_to_keep = [i for i in range(len(combined_df)) if combined_df['has_matched_image'].values[i]]
     combined_df = combined_df.iloc[idxs_to_keep]
     combined_df.index = range(len(combined_df))
-    matched_images = [matched_images[i] for i in idxs_to_keep]
     image_codes = [image_codes[i] for i in idxs_to_keep]
-    ensure_barcodes_match(combined_df, image_codes)
-    print("Total number of images matched to clinical ratings: %i" % len(matched_images))
-    assert all([a is not None for a in matched_images])
-    assert combined_df['has_matched_image'].all()
-    return combined_df, matched_images, image_codes
 
+    ensure_barcodes_match(combined_df, image_codes)
+    print("Total number of images matched to clinical ratings: %i" % len(image_codes))
+    assert combined_df['has_matched_image'].all()
+
+    return combined_df, image_codes
 
 
