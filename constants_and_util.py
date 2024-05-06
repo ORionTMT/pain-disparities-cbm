@@ -66,7 +66,7 @@ else:
     # Please modify variables / paths here. 
     if sys.version.split()[0] != '3.5.2':
         print("Warning: running code with a Python version which differs from original Python version (3.5.2)")
-    REPROCESS_RAW_DATA = False # set this to False if you just want to work with the processed data, and don't need to reprocess it. 
+    REPROCESS_RAW_DATA = True # set this to False if you just want to work with the processed data, and don't need to reprocess it. 
     
     # Please set these paths for your system. 
     INDIVIDUAL_IMAGES_PATH = '/home/jacktongmt/pain-disparities-cbm/processed_data_00m' # points to the directory which stores the processed data, so you should download the processed data into this folder. If you are reprocessing the raw data, the individual images will be stored in this folder. 
