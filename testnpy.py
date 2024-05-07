@@ -1,6 +1,6 @@
 import numpy as np
 
-source_address = "/path/to/your/file.npz"
+source_address = "/home/jacktongmt/pain-disparities-cbm/processed_data_00m/train/show_both_knees_True_downsample_factor_None_normalization_method_our_statistics/image_890.npz"
 
 # Load the .npz file
 data = np.load(source_address)
