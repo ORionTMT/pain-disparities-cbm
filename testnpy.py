@@ -12,4 +12,4 @@ keys = data.files
 for key in keys:
     array = data[key]
     dimensions = array.shape
-    print(f"Dimensions of array '{key}': {dimensions}")
+    print("Dimensions of array '{}': {}".format(key, dimensions))
