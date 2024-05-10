@@ -8,4 +8,4 @@ with open('/home/jacktongmt/pain-disparities-cbm/processed_data_00m/train/show_b
         print(len(data))  # Print the length of the list
         print(data[0]) 
     except Exception as e:
-        print(f"Error occurred while loading pickle file: {str(e)}")
+        print(f"Error occurred while loading pickle file")
